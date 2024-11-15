@@ -1,74 +1,53 @@
-// Praktikum P04:
-// Taster entDEBOUNCE_TIMEen, Long Press
-// Version 2: EntDEBOUNCE_TIMEen mit Timern - Polling in ISR
-
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-const int UP_KEY_PIN = 2;
-const int DOWN_KEY_PIN = 3;
-const int DEBOUNCE_TIME = 30;
+// Praktikum P04: 
+// Taster entprellen, Long Press 
+// Version 2: Entprellen mit Timern - Polling in ISR
 
-const uint32_t LONG_PRESS = 1000;  // long press >= 1s
+typedef enum buttonState {
+  RELEASED = 0x0,
+  PRESSED = 0x1
+};
 
-volatile uint32_t actTime = 0;
-volatile uint32_t lastUpKeyTime = 0;
-volatile uint32_t lastDownKeyTime = 0;
-volatile uint32_t lastUpHoldTime = 0;
-volatile uint32_t lastDownHoldTime = 0;
+const uint8_t UP_KEY_PIN = PD2;
+const uint8_t DOWN_KEY_PIN = PD3;
+const uint8_t LONG_PRESS_ITERATIONS = 33; // ISR called every 30ms: 30ms * 33ms = 990ms
+
 // states :
-// 0 = nicht gedr체ckt
-// 1 = gedr체ckt
-volatile int stateKeyUp = 0;
-volatile int stateKeyDown = 0;
-volatile int16_t parameter;
-volatile int16_t lastp;
+// 0 = nicht gedrückt
+// 1 = gedrückt
+volatile uint8_t currentUpKeyPressedIterations = 0;
+volatile uint8_t currentDownKeyPressedIterations = 0;
+volatile int16_t parameter = 0;
+volatile int16_t lastParameter;
+bool statePinUp = RELEASED;
+bool statePinDown = RELEASED;
+uint8_t longpressState = RELEASED;
+volatile int lastLong = 0;
+volatile uint16_t timerStart = 0;
 
 void setup() {
-  // Todo Setup Timer (Z채hlvariable bis 65535), Taktfrequenz Prozessor 16 MHz
-
-  TCCR1A = 0;
-  // Interrupt f체r Timer 1 aktivieren
+  TCCR1A = 0; 
+  // Todo Setup Timer (Zählvariable bis 65535), Taktfrequenz Prozessor 16 MHz
   TIMSK1 |= (1 << TOIE1);
-  // Prescaler = 64
-  TCCR1B = (1 << CS10) | (1 << CS11);
-  // 1 Sek TCCR1B = (1 << CS12);
+  TCCR1B = (1 << CS10) | (1 << CS11); 
+  // 1 Sek TCCR1B = (1 << CS12); 
+  timerStart = 58036;
+  TCNT1 = timerStart;
+  DDRD &= ~(1 << UP_KEY_PIN);
+  DDRD &= ~(1 << DOWN_KEY_PIN);
 
   Serial.begin(9600);
   sei();
+  Serial.println("Ready...");
 }
 
 void loop() {
-  actTime = millis();
-
-  if (lastp != parameter) {
+  if (lastParameter != parameter) {
     Serial.print("Parameter: ");
     Serial.println(parameter);
-    lastp = parameter;
-  }
-
-  if (digitalRead(UP_KEY_PIN) == HIGH && stateKeyUp == 0) {
-    if (actTime - lastUpKeyTime > DEBOUNCE_TIME) {
-      lastUpKeyTime = actTime;
-      stateKeyUp = 1;
-    }
-  } else if (digitalRead(UP_KEY_PIN) == HIGH && stateKeyUp == 1) {
-    if (actTime - lastUpKeyTime >= LONG_PRESS) {
-      stateKeyUp = 2;
-      lastUpHoldTime = actTime;
-    }
-  }
-
-  if (digitalRead(DOWN_KEY_PIN) == HIGH && stateKeyDown == 0) {
-    if (actTime - lastDownKeyTime > DEBOUNCE_TIME) {
-      lastDownKeyTime = actTime;
-      stateKeyDown = 1;
-    }
-  } else if (digitalRead(DOWN_KEY_PIN) == HIGH && stateKeyDown == 1) {
-    if (actTime - lastDownKeyTime >= LONG_PRESS) {
-      stateKeyDown = 2;
-      lastDownHoldTime = actTime;
-    }
+    lastParameter = parameter;
   }
 }
 
@@ -76,28 +55,49 @@ ISR(TIMER1_OVF_vect) {
   // Hier alle 30 ms reinspringen.
   // Taster auslesen, Zustandsautomat
 
-  int32_t pressedUpDuration = actTime - lastUpHoldTime;
-  int32_t pressedDownDuration = actTime - lastDownHoldTime;
+  uint8_t currentUpPinState = PIND & (1 << UP_KEY_PIN) ? PRESSED : RELEASED;
+  uint8_t currentDownPinState = PIND & (1 << DOWN_KEY_PIN) ? PRESSED : RELEASED;
 
-  // up key
-  if (digitalRead(2) == LOW) {
-    if (stateKeyUp == 1) {
-      parameter += 1;
+  // Increment of the parameter
+  if (currentUpPinState == PRESSED && statePinUp == HIGH) {
+    if (currentUpKeyPressedIterations > LONG_PRESS_ITERATIONS) {
+      parameter = parameter + 10;
+      currentUpKeyPressedIterations = 0;
+      longpressState = PRESSED;
     }
-    stateKeyUp = 0;
-  } else if (digitalRead(2) == HIGH && stateKeyUp == 2 && pressedUpDuration > LONG_PRESS) {
-    parameter += 10;
-    lastUpHoldTime = actTime;
+    currentUpKeyPressedIterations++;
+  } else if (currentUpPinState == RELEASED && statePinUp == HIGH && currentUpKeyPressedIterations == 0) {
+    if (longpressState != PRESSED) {
+      parameter++;
+    }
+    longpressState = RELEASED;
+
+    statePinUp = RELEASED;
+  } else if (currentUpPinState == HIGH && statePinUp == LOW) {
+    statePinUp = PRESSED;
+  } else {
+    currentUpKeyPressedIterations = 0;
   }
 
-  // down key
-  if (digitalRead(3) == LOW) {
-    if (stateKeyDown == 1) {
-      parameter -= 1;
-    }
-    stateKeyDown = 0;
-  } else if (digitalRead(3) == HIGH && stateKeyDown == 2 && pressedDownDuration > LONG_PRESS) {
+  // Decrement of the parameter
+  if (currentDownPinState == HIGH && statePinDown == HIGH) {
+    if (currentDownKeyPressedIterations > LONG_PRESS_ITERATIONS) {  // 990 ms
       parameter -= 10;
-      lastDownHoldTime = actTime;
+      currentDownKeyPressedIterations = 0;
+      longpressState = PRESSED;
+    }
+    currentDownKeyPressedIterations++;
+  } else if (currentDownPinState == LOW && statePinDown == HIGH && currentDownKeyPressedIterations == 0) {
+    if (longpressState != PRESSED) {
+      parameter--;
+    }
+    longpressState = RELEASED;
+
+    statePinDown = RELEASED;
+  } else if (currentDownPinState == HIGH && statePinDown == LOW) {
+    statePinDown = PRESSED;
+  } else {
+    currentDownKeyPressedIterations = 0;
   }
+  TCNT1 = timerStart;
 }
