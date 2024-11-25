@@ -7,22 +7,85 @@
 #include <avr/interrupt.h>
 #include <stdbool.h>
 
+// Columns
 #define C1 6
 #define C2 7
 #define C3 8
 #define C4 9
-#define R1 2
-#define R2 3
-#define R3 4
-#define R4 5
-
-#define PIN_OFFSET 2
-
-#define STATE(input) (input == HIGH) ? "|1 " : "|0 "
+// Rows
+#define R1 5
+#define R2 4
+#define R3 3
+#define R4 2
 
 #define ROWS 4
 #define COLS 4
+
+#define ROW0 0
+#define ROW1 1
+#define ROW2 2
+#define ROW3 3
+#define COL0 0
+#define COL1 1
+#define COL2 2
+#define COL3 3
+
+#define S1 0
+#define S2 1
+#define S3 2
+#define S4 3
+#define S5 4
+#define S6 5
+#define S7 6
+#define S8 7
+#define S9 8
+#define S10 9
+#define S11 10
+#define S12 11
+#define S13 12
+#define S14 13
+#define S15 14
+#define S16 15
+
+#define STATE(input) (input == HIGH) ? "|1 " : "|0 "
+
+#define PRINT_MATRIX                       \
+  Serial.println("  |C1|C2|C3|C4");        \
+  Serial.println("--+--+--+--+--");        \
+  Serial.print("R1");                      \
+  Serial.print(STATE(inputMatrix[S1]));    \
+  Serial.print(STATE(inputMatrix[S2]));    \
+  Serial.print(STATE(inputMatrix[S3]));    \
+  Serial.println(STATE(inputMatrix[S4]));  \
+  Serial.println("--+--+--+--+--");        \
+  Serial.print("R2");                      \
+  Serial.print(STATE(inputMatrix[S5]));    \
+  Serial.print(STATE(inputMatrix[S6]));    \
+  Serial.print(STATE(inputMatrix[S7]));    \
+  Serial.println(STATE(inputMatrix[S8]));  \
+  Serial.println("--+--+--+--+--");        \
+  Serial.print("R3");                      \
+  Serial.print(STATE(inputMatrix[S9]));    \
+  Serial.print(STATE(inputMatrix[S10]));   \
+  Serial.print(STATE(inputMatrix[S11]));   \
+  Serial.println(STATE(inputMatrix[S12])); \
+  Serial.println("--+--+--+--+--");        \
+  Serial.print("R4");                      \
+  Serial.print(STATE(inputMatrix[S13]));   \
+  Serial.print(STATE(inputMatrix[S14]));   \
+  Serial.print(STATE(inputMatrix[S15]));   \
+  Serial.println(STATE(inputMatrix[S16])); \
+  Serial.print("Parameter: ");             \
+  Serial.println(parameter);               \
+  Serial.println();
+
 #define INDEX(currentCol) (currentRow * ROWS) + currentCol
+
+#define COPY_INPUT_MATRIX_TO_PREVIOUS          \
+  for (uint8_t i = 0; i < (ROWS * COLS); i++)  \
+  {                                            \
+    previousInputMatrix[i] = inputMatrix[i];   \
+  }
 
 volatile uint32_t time_current = 0;
 volatile uint32_t last_display_time = 0;
@@ -33,121 +96,93 @@ volatile int16_t parameter;
 volatile uint8_t inputMatrix[ROWS * COLS] = {0};
 volatile uint8_t previousInputMatrix[ROWS * COLS] = {0};
 
-void setup() {
-  TCCR1A = 0; 
-  // Todo Setup Timer (Zählvariable bis 65535), Taktfrequenz Prozessor 16 MHz
-  TIMSK1 |= (1 << TOIE1);
-  TCCR1B = (1 << CS10) | (1 << CS11); 
-  // 1 Sek TCCR1B = (1 << CS12); 
-  sei(); 
+void setup()
+{
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCCR1B |= (1 << WGM12);
+  OCR1A = 2499;                        // 16 MHz / 64 (Prescaler) = 250000 Ticks/s => 2500 Ticks/10ms - 1
+  TIMSK1 |= (1 << OCIE1A);             // Enable Timer1 compare interrupt
+  TCCR1B |= (1 << CS11) | (1 << CS10); // Start Timer1 with prescaler 64
+
+  pinMode(C1, INPUT);
+  pinMode(C2, INPUT);
+  pinMode(C3, INPUT);
+  pinMode(C4, INPUT);
+
+  pinMode(R1, INPUT);
+  pinMode(R2, INPUT);
+  pinMode(R3, INPUT);
+  pinMode(R4, INPUT);
+
+  sei();
 
   Serial.begin(9600);
   Serial.println("Ready...");
 }
 
-void printMatrix()
-{
-  Serial.println("  |C1|C2|C3|C4");
-  Serial.println("--+--+--+--+--");
-  Serial.print("R1");
-  Serial.print(STATE(inputMatrix[0]));
-  Serial.print(STATE(inputMatrix[1]));
-  Serial.print(STATE(inputMatrix[2]));
-  Serial.println(STATE(inputMatrix[3]));
-  Serial.println("--+--+--+--+--");
-  Serial.print("R2");
-  Serial.print(STATE(inputMatrix[4]));
-  Serial.print(STATE(inputMatrix[5]));
-  Serial.print(STATE(inputMatrix[6]));
-  Serial.println(STATE(inputMatrix[7]));
-  Serial.println("--+--+--+--+--");
-  Serial.print("R3");
-  Serial.print(STATE(inputMatrix[8]));
-  Serial.print(STATE(inputMatrix[9]));
-  Serial.print(STATE(inputMatrix[10]));
-  Serial.println(STATE(inputMatrix[11]));
-  Serial.println("--+--+--+--+--");
-  Serial.print("R4");
-  Serial.print(STATE(inputMatrix[12]));
-  Serial.print(STATE(inputMatrix[13]));
-  Serial.print(STATE(inputMatrix[14]));
-  Serial.println(STATE(inputMatrix[15]));
-
-  Serial.print("Parameter: ");
-  Serial.println(parameter);
-  Serial.println();
-}
-
 void loop()
 {
   time_current = millis();
-  if (time_current > last_display_time + cycle_time_display) {
+  if (time_current > last_display_time + cycle_time_display)
+  {
     last_display_time += cycle_time_display;
-    printMatrix();
+    PRINT_MATRIX
   }
 
-  for (uint8_t i = 0; i < (ROWS * COLS); i++)
-  {
-    previousInputMatrix[i] = inputMatrix[i];
-  }
+  COPY_INPUT_MATRIX_TO_PREVIOUS
 }
 
-ISR(TIMER1_OVF_vect)
+ISR(TIMER1_COMPA_vect)
 {
   // Hier alle 10 ms reinspringen.
   // Taster auslesen, Zustandsautomat
-  switch (currentRow + PIN_OFFSET)
+  switch (currentRow)
   {
-  case R1:
+  case ROW0:
     pinMode(R1, OUTPUT);
     pinMode(R2, INPUT);
     pinMode(R3, INPUT);
     pinMode(R4, INPUT);
     digitalWrite(R1, HIGH);
     break;
-  case R2:
+  case ROW1:
     pinMode(R1, INPUT);
     pinMode(R2, OUTPUT);
     pinMode(R3, INPUT);
     pinMode(R4, INPUT);
     digitalWrite(R2, HIGH);
     break;
-  case R3:
+  case ROW2:
     pinMode(R1, INPUT);
     pinMode(R2, INPUT);
     pinMode(R3, OUTPUT);
     pinMode(R4, INPUT);
     digitalWrite(R3, HIGH);
     break;
-  case R4:
+  case ROW3:
     pinMode(R1, INPUT);
     pinMode(R2, INPUT);
     pinMode(R3, INPUT);
     pinMode(R4, OUTPUT);
     digitalWrite(R4, HIGH);
     break;
-  default:
-    pinMode(R1, INPUT);
-    pinMode(R2, INPUT);
-    pinMode(R3, INPUT);
-    pinMode(R4, INPUT);
-    break;
   }
 
-  inputMatrix[INDEX(0)] = digitalRead(C1);
-  inputMatrix[INDEX(1)] = digitalRead(C2);
-  inputMatrix[INDEX(2)] = digitalRead(C3);
-  inputMatrix[INDEX(3)] = digitalRead(C4);
+  inputMatrix[INDEX(COL0)] = digitalRead(C1);
+  inputMatrix[INDEX(COL1)] = digitalRead(C2);
+  inputMatrix[INDEX(COL2)] = digitalRead(C3);
+  inputMatrix[INDEX(COL3)] = digitalRead(C4);
 
-  if (inputMatrix[0] == LOW && previousInputMatrix[0] == HIGH)
+  if (inputMatrix[S1] == LOW && previousInputMatrix[S1] == HIGH)
   {
     parameter++;
   }
 
-  if (inputMatrix[1] == LOW && previousInputMatrix[1] == HIGH)
+  if (inputMatrix[S2] == LOW && previousInputMatrix[S2] == HIGH)
   {
     parameter--;
   }
 
-  currentRow = (currentRow + 1) % 4;
+  currentRow = (currentRow + 1) % ROWS;
 }
