@@ -83,9 +83,7 @@
 
 #define COPY_INPUT_MATRIX_TO_PREVIOUS          \
   for (uint8_t i = 0; i < (ROWS * COLS); i++)  \
-  {                                            \
     previousInputMatrix[i] = inputMatrix[i];   \
-  }
 
 volatile uint32_t time_current = 0;
 volatile uint32_t last_display_time = 0;
