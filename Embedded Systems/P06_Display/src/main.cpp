@@ -7,6 +7,7 @@
 #include <avr/interrupt.h>
 #include <stdbool.h>
 #include <EEPROM.h>
+#include <LiquidCrystal_I2C.h>
 
 // Columns
 #define C1 6
@@ -47,18 +48,19 @@
 #define READ 0x2
 #define WRITE 0x3
 
+// lcd display
+const static int LCD_I2C_ADDRESS = 0x27;
+const static int LCD_COLS = 16;
+const static int LCD_ROWS = 2;
+LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLS, LCD_ROWS);
+
 #define COPY_INPUT_MATRIX_TO_PREVIOUS         \
   for (uint8_t i = 0; i < (ROWS * COLS); i++) \
     previousInputMatrix[i] = inputMatrix[i];
 
-#define PRINT_PARAMS  \
-  Serial.print(p0);      \
-  Serial.print(" "); \
-  Serial.print(p1);      \
-  Serial.print(" "); \
-  Serial.print(p2);      \
-  Serial.print(" "); \
-  Serial.print(p3);
+volatile uint32_t time_current = 0;
+volatile uint32_t last_display_time = 0;
+const uint32_t cycle_time_display = 1000;
 
 volatile uint8_t currentRow = 0;
 volatile uint8_t inputMatrix[ROWS * COLS] = {0};
@@ -68,11 +70,11 @@ volatile int8_t p0 = 0;
 volatile int8_t p1 = 0;
 volatile int8_t p2 = 0;
 volatile int8_t p3 = 0;
-volatile uint8_t memoryAction = NONE;
+volatile int8_t memoryAction = NONE;
 
-volatile uint8_t printStatus = NONE;
-volatile uint8_t writeStatus = NONE;
-volatile uint8_t readStatus = NONE;
+volatile int8_t printStatus = NONE;
+volatile int8_t writeStatus = NONE;
+volatile int8_t readStatus = NONE;
 
 volatile int8_t *pointerP0 = &p0;
 volatile int8_t *pointerP1 = &p1;
@@ -88,6 +90,17 @@ volatile int8_t *pointerP3 = &p3;
   {                                                                               \
     (*currentParameter) = (*currentParameter) + ((operator== PLUS) ? 1 : -1 * 1); \
   }
+
+#define PRINT_PARAMS  \
+  lcd.print(p0);      \
+  lcd.print(" "); \
+  lcd.print(p1);      \
+  lcd.print(" "); \
+  lcd.print(p2);      \
+  lcd.print(" "); \
+  lcd.print(p3);
+
+#define CLEAR_INPUT_LINE(y) lcd.setCursor(0, y); lcd.print("                ");
 
 void setup()
 {
@@ -110,23 +123,32 @@ void setup()
 
   sei();
 
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+
+  PRINT_PARAMS;
+
   Serial.begin(9600);
   Serial.println("Ready...");
-  PRINT_PARAMS;
 }
 
 void loop()
 {
   if (printStatus == PRINT)
   {
+    CLEAR_INPUT_LINE(1);
+    CLEAR_INPUT_LINE(0);
+    lcd.setCursor(0, 0);
     PRINT_PARAMS;
-
     printStatus = NONE;
   }
 
   if (readStatus == READ)
   {
-    Serial.println("READING...");
+    CLEAR_INPUT_LINE(1);
+    lcd.setCursor(0, 1);
+    lcd.print("READING...");
     p0 = EEPROM.read(0);
     p1 = EEPROM.read(1);
     p2 = EEPROM.read(2);
@@ -136,7 +158,9 @@ void loop()
 
   if (writeStatus == WRITE)
   {
-    Serial.println("WRITING...");
+    CLEAR_INPUT_LINE(1);
+    lcd.setCursor(0, 1);
+    lcd.print("WRITING...");
     EEPROM.put(0, p0);
     EEPROM.put(1, p1);
     EEPROM.put(2, p2);
