@@ -167,13 +167,14 @@ void loop()
     EEPROM.put(3, p3);
     writeStatus = NONE;
   }
-  COPY_INPUT_MATRIX_TO_PREVIOUS;
 }
 
 ISR(TIMER1_COMPA_vect)
 {
   // Hier alle 10 ms reinspringen.
   // Taster auslesen, Zustandsautomat
+  COPY_INPUT_MATRIX_TO_PREVIOUS;
+  
   switch (currentRow)
   {
   case 0:

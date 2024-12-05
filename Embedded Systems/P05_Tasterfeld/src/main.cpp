@@ -127,14 +127,14 @@ void loop()
     last_display_time += cycle_time_display;
     PRINT_MATRIX
   }
-
-  COPY_INPUT_MATRIX_TO_PREVIOUS
 }
 
 ISR(TIMER1_COMPA_vect)
 {
   // Hier alle 10 ms reinspringen.
   // Taster auslesen, Zustandsautomat
+  COPY_INPUT_MATRIX_TO_PREVIOUS
+  
   switch (currentRow)
   {
   case ROW0:
