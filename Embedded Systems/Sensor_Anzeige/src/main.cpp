@@ -1,18 +1,22 @@
 #include <Arduino.h>
+#include <LiquidCrystal_I2C.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#define minTemp = -55;
+#define maxTemp = 155;
 
-void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup()
+{
+  lcd.init();
+  lcd.clear();
+  lcd.backlight();
+  lcd.print("Initializing...");
+  delay(2000);
+  lcd.clear();
 }
 
-void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+void loop()
+{
+  
 }
