@@ -1,10 +1,20 @@
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
+#include <avr/interrupt.h>
 
-float getKTY110Temp();
+#define U_REF 5
+#define R1 1000.0
+#define AD_MAX 1023.0
+#define MIN_TEMP_KTY120 -55;
+#define MAX_TEMP_KTY120 155;
 
-#define minTemp = -55;
-#define maxTemp = 155;
+float getKTY120Temp();
+float getLM35Temp();
+
+volatile uint8_t sensorSelector = 0;
+volatile uint8_t prevPinState = LOW;
+
+#define CHANGE_SENSOR sensorSelector = sensorSelector + 1 % 2
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -35,8 +45,20 @@ const float lookup[24][2] = {
     {150, 2211},
 };
 
+volatile uint16_t timerStart;
+
 void setup()
 {
+  TCCR1A = 0;
+  // Todo Setup Timer (Zählvariable bis 65535), Taktfrequenz Prozessor 16 MHz
+  TIMSK1 |= (1 << TOIE1);
+  TCCR1B = (1 << CS10) | (1 << CS11);
+  // 1 Sek TCCR1B = (1 << CS12);
+  timerStart = 58036;
+  TCNT1 = timerStart;
+  Serial.begin(9600);
+  sei();
+
   lcd.init();
   lcd.clear();
   lcd.backlight();
@@ -48,31 +70,53 @@ void setup()
 
 void loop()
 {
-  if (getKTY110Temp() != -999.0)
+  switch (sensorSelector)
   {
-    lcd.setCursor(0, 0);
-    lcd.print("KTY110: ");
-    lcd.print(getKTY110Temp(), 1);
-    lcd.print(char(223));
-    lcd.print("C");
+  case 0:
+    if (getKTY120Temp() != -999.0)
+    {
+      lcd.setCursor(0, 0);
+      lcd.print("KTY120: ");
+      lcd.print(getKTY120Temp(), 1);
+      lcd.print(char(223));
+      lcd.print("C");
+    }
+    else
+    {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Error: KTY120");
+    }
+    break;
+  case 1:
+    if (getLM35Temp() != -999.0)
+    {
+      lcd.setCursor(0, 0);
+      lcd.print("LM35: ");
+      lcd.print(getLM35Temp(), 1);
+      lcd.print(char(223));
+      lcd.print("C");
+    }
+    else
+    {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Error: LM35");
+    }
+    break;
   }
-  else {
-    lcd.setCursor(0, 0);
-    lcd.print("Error");
-  }
-
-  delay(1000);
+  delay(500);
 }
 
-float getKTY110Temp()
+float getKTY120Temp()
 {
-  float u_sensor = analogRead(A0) * (5.0 / 1023.0);
-  float r_sensor = 1000 * (5.0 - u_sensor) / u_sensor;
+  float u_sensor = analogRead(A0) * (U_REF / AD_MAX);
+  float r_sensor = R1 * (U_REF - u_sensor) / u_sensor;
 
-  lcd.setCursor(0,1);
-  lcd.print("r_sensor: ");
-  lcd.print(r_sensor);
-  lcd.setCursor(8,0);
+  // lcd.setCursor(0,1);
+  // lcd.print("r_sensor: ");
+  // lcd.print(r_sensor);
+  // lcd.setCursor(8,0);
 
   float t_1, t_2, r_1, r_2;
 
@@ -89,4 +133,21 @@ float getKTY110Temp()
     }
   }
   return -999.0;
+}
+
+float getLM35Temp()
+{
+  return -999.0;
+}
+
+ISR(TIMER1_OVF_vect)
+{
+  uint8_t currentPinState = digitalRead(2);
+
+  if (currentPinState == LOW && prevPinState == HIGH)
+  {
+    CHANGE_SENSOR;
+  }
+
+  prevPinState = currentPinState;
 }
