@@ -8,15 +8,16 @@
 #define MIN_TEMP_KTY120 -55;
 #define MAX_TEMP_KTY120 155;
 
-float getKTY120Temp();
-float getLM35Temp();
+#define KTY120 0
+#define LM35 1
+#define MAGNET 2
+#define LIGHT 3
+#define SENSOR_NUMBER 4
 
-volatile uint8_t sensorSelector = 0;
-volatile uint8_t prevPinState = LOW;
-
-#define CHANGE_SENSOR sensorSelector = sensorSelector + 1 % 2
-
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+#define KTY120_TEMP_SENSOR A0
+#define LM35_TEMP_SENSOR A2
+#define SS490_MAGNET_SENSOR A1
+#define PDIC144_LIGHT_SENSOR A3
 
 const float lookup[24][2] = {
     {-55, 490},
@@ -47,11 +48,24 @@ const float lookup[24][2] = {
 
 volatile uint16_t timerStart;
 
+volatile uint8_t sensorSelector = KTY120;
+volatile uint8_t prevPinState = LOW;
+
+#define SELECT_NEXT_SENSOR sensorSelector = (sensorSelector + 1) % SENSOR_NUMBER
+
+float getKTY120TempInCelsius();
+float getLM35TempInCelsius();
+float getSS490MagnetInGauss();
+float getPDIC144LightInLux();
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
 void setup()
 {
   TCCR1A = 0;
-  // Todo Setup Timer (Zählvariable bis 65535), Taktfrequenz Prozessor 16 MHz
+  // Interrupt f체r Timer 1 aktivieren
   TIMSK1 |= (1 << TOIE1);
+  // Prescaler = 64
   TCCR1B = (1 << CS10) | (1 << CS11);
   // 1 Sek TCCR1B = (1 << CS12);
   timerStart = 58036;
@@ -70,47 +84,68 @@ void setup()
 
 void loop()
 {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+
   switch (sensorSelector)
   {
-  case 0:
-    if (getKTY120Temp() != -999.0)
+  case KTY120:
+    if (getKTY120TempInCelsius() != -999.0)
     {
-      lcd.setCursor(0, 0);
       lcd.print("KTY120: ");
-      lcd.print(getKTY120Temp(), 1);
+      lcd.print(getKTY120TempInCelsius(), 1);
       lcd.print(char(223));
       lcd.print("C");
     }
     else
     {
-      lcd.clear();
-      lcd.setCursor(0, 0);
       lcd.print("Error: KTY120");
     }
     break;
-  case 1:
-    if (getLM35Temp() != -999.0)
+  case LM35:
+    if (getLM35TempInCelsius() != -999.0)
     {
-      lcd.setCursor(0, 0);
       lcd.print("LM35: ");
-      lcd.print(getLM35Temp(), 1);
+      lcd.print(getLM35TempInCelsius(), 1);
       lcd.print(char(223));
       lcd.print("C");
     }
     else
     {
-      lcd.clear();
-      lcd.setCursor(0, 0);
       lcd.print("Error: LM35");
     }
     break;
+  case MAGNET:
+
+    if (getSS490MagnetInGauss() != -999.0)
+    {
+      lcd.print("SS490: ");
+      lcd.print(getSS490MagnetInGauss(), 1);
+      lcd.print("Gauss");
+    }
+    else
+    {
+      lcd.print("Error: SS490");
+    }
+    break;
+  case LIGHT:
+    if(getPDIC144LightInLux() != -999.0)
+    {
+      lcd.print("PDIC144: ");
+      lcd.print(getPDIC144LightInLux(), 1);
+      lcd.print("Lux");
+    }
+    else {
+      lcd.print("Error: PDIC144");
+    }
+    break;
   }
-  delay(500);
+  delay(1000);
 }
 
-float getKTY120Temp()
+float getKTY120TempInCelsius()
 {
-  float u_sensor = analogRead(A0) * (U_REF / AD_MAX);
+  float u_sensor = analogRead(KTY120_TEMP_SENSOR) * (U_REF / AD_MAX);
   float r_sensor = R1 * (U_REF - u_sensor) / u_sensor;
 
   // lcd.setCursor(0,1);
@@ -135,7 +170,24 @@ float getKTY120Temp()
   return -999.0;
 }
 
-float getLM35Temp()
+float getLM35TempInCelsius()
+{
+  float u_sensor = analogRead(LM35_TEMP_SENSOR) * (U_REF / AD_MAX);
+  float temp = u_sensor * 10.0;
+
+  if(temp >= -55 && temp <= 150)
+  {
+    return temp;
+  }
+  return -999.0;
+}
+
+float getSS490MagnetInGauss()
+{
+  return -999.0;
+}
+
+float getPDIC144LightInLux()
 {
   return -999.0;
 }
@@ -146,7 +198,7 @@ ISR(TIMER1_OVF_vect)
 
   if (currentPinState == LOW && prevPinState == HIGH)
   {
-    CHANGE_SENSOR;
+    SELECT_NEXT_SENSOR;
   }
 
   prevPinState = currentPinState;
