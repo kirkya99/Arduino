@@ -16,8 +16,8 @@
 
 #define KTY120_TEMP_SENSOR A0
 #define LM35_TEMP_SENSOR A2
-#define SS490_MAGNET_SENSOR A1
-#define PDIC144_LIGHT_SENSOR A3
+#define SS495_MAGNET_SENSOR A3
+#define PDIC144_LIGHT_SENSOR A1
 
 const float lookup[24][2] = {
     {-55, 490},
@@ -55,7 +55,7 @@ volatile uint8_t prevPinState = LOW;
 
 float getKTY120TempInCelsius();
 float getLM35TempInCelsius();
-float getSS490MagnetInGauss();
+float getSS495MagnetInGauss();
 float getPDIC144LightInLux();
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -77,8 +77,8 @@ void setup()
   lcd.clear();
   lcd.backlight();
   lcd.setCursor(0, 0);
-  lcd.print("Initializing...");
-  delay(2000);
+  lcd.print("Initializing ...");
+  delay(1500);
   lcd.clear();
 }
 
@@ -117,15 +117,15 @@ void loop()
     break;
   case MAGNET:
 
-    if (getSS490MagnetInGauss() != -999.0)
+    if (getSS495MagnetInGauss() != -999.0)
     {
-      lcd.print("SS490: ");
-      lcd.print(getSS490MagnetInGauss(), 1);
-      lcd.print("Gauss");
+      lcd.print("SS495: ");
+      lcd.print(getSS495MagnetInGauss(), 2);
+      lcd.print(" G");
     }
     else
     {
-      lcd.print("Error: SS490");
+      lcd.print("Error: SS495");
     }
     break;
   case LIGHT:
@@ -172,8 +172,7 @@ float getKTY120TempInCelsius()
 
 float getLM35TempInCelsius()
 {
-  float u_sensor = analogRead(LM35_TEMP_SENSOR) * (U_REF / AD_MAX);
-  float temp = u_sensor * 10.0;
+  float temp = (5 * analogRead(LM35_TEMP_SENSOR) * 100 / AD_MAX) * -1.0;
 
   if(temp >= -55 && temp <= 150)
   {
@@ -182,8 +181,14 @@ float getLM35TempInCelsius()
   return -999.0;
 }
 
-float getSS490MagnetInGauss()
+float getSS495MagnetInGauss()
 {
+  float u_sensor = analogRead(SS495_MAGNET_SENSOR) * (U_REF / AD_MAX);
+
+  if(u_sensor >= 0.5 && u_sensor <= 4.5){
+    return 320 * u_sensor - 800;
+  }
+
   return -999.0;
 }
 
