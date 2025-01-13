@@ -94,6 +94,8 @@ void loop()
     {
       lcd.print("KTY120: ");
       lcd.print(getKTY120TempInCelsius(), 1);
+      lcd.setCursor(0, 1);
+      lcd.print("Unit: ");
       lcd.print(char(223));
       lcd.print("C");
     }
@@ -107,6 +109,8 @@ void loop()
     {
       lcd.print("LM35: ");
       lcd.print(getLM35TempInCelsius(), 1);
+      lcd.setCursor(0, 1);
+      lcd.print("Unit: ");
       lcd.print(char(223));
       lcd.print("C");
     }
@@ -121,7 +125,9 @@ void loop()
     {
       lcd.print("SS495: ");
       lcd.print(getSS495MagnetInGauss(), 2);
-      lcd.print(" G");
+      lcd.setCursor(0, 1);
+      lcd.print("Unit: ");
+      lcd.print("Gauss");
     }
     else
     {
@@ -129,13 +135,16 @@ void loop()
     }
     break;
   case LIGHT:
-    if(getPDIC144LightInLux() != -999.0)
+    if (getPDIC144LightInLux() != -999.0)
     {
       lcd.print("PDIC144: ");
       lcd.print(getPDIC144LightInLux(), 1);
+      lcd.setCursor(0, 1);
+      lcd.print("Unit: ");
       lcd.print("Lux");
     }
-    else {
+    else
+    {
       lcd.print("Error: PDIC144");
     }
     break;
@@ -147,11 +156,6 @@ float getKTY120TempInCelsius()
 {
   float u_sensor = analogRead(KTY120_TEMP_SENSOR) * (U_REF / AD_MAX);
   float r_sensor = R1 * (U_REF - u_sensor) / u_sensor;
-
-  // lcd.setCursor(0,1);
-  // lcd.print("r_sensor: ");
-  // lcd.print(r_sensor);
-  // lcd.setCursor(8,0);
 
   float t_1, t_2, r_1, r_2;
 
@@ -174,7 +178,7 @@ float getLM35TempInCelsius()
 {
   float temp = (5 * analogRead(LM35_TEMP_SENSOR) * 100 / AD_MAX) * -1.0;
 
-  if(temp >= -55 && temp <= 150)
+  if (temp >= -55 && temp <= 150)
   {
     return temp;
   }
@@ -185,7 +189,8 @@ float getSS495MagnetInGauss()
 {
   float u_sensor = analogRead(SS495_MAGNET_SENSOR) * (U_REF / AD_MAX);
 
-  if(u_sensor >= 0.5 && u_sensor <= 4.5){
+  if (u_sensor >= 0.5 && u_sensor <= 4.5)
+  {
     return 320 * u_sensor - 800;
   }
 
@@ -194,6 +199,15 @@ float getSS495MagnetInGauss()
 
 float getPDIC144LightInLux()
 {
+  float u_sensor = analogRead(PDIC144_LIGHT_SENSOR) * (U_REF / AD_MAX);
+
+  float lux = pow(10, (0.67 * log10(u_sensor) + 1.28));
+
+  if(lux >= 0.0 && lux <= 1000.0)
+  {
+    return lux;
+  }
+
   return -999.0;
 }
 
